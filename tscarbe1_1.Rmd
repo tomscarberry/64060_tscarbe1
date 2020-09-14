@@ -1,0 +1,62 @@
+---
+title: "tscarbe1_1"
+author: "Tom Scarberry"
+date: "9/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## data source https://github.com/jakevdp/marathon-data/blob/master/marathon-data.csv 
+
+
+```{r marathon.data}
+colnames(marathon.data)  
+
+```
+
+```{r marathon.data}
+summary (marathon.data)  
+
+```
+## descriptive statistics for data
+## age is a quantitative variable
+## gender is a categorical variable
+
+```{r marathon.data}
+mean(marathon.data$age)
+min(marathon.data$age)
+max(marathon.data$age)
+
+```
+
+```{r marathon.data}
+plot(marathon.data)
+
+```
+## plots of all the differnt variables
+```{r marathon.data}
+summary (marathon.data$age-5)  
+
+```
+## transforming age data
+
+```{r}
+plot(marathon.data$age)
+
+```
+##plot of age which is the only numeric value in the data set
+##data set does not have two numeric values to appropriately scatterplot
+
