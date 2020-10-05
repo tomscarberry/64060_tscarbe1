@@ -1,0 +1,342 @@
+---
+title: 'ML Assignment #2'
+author: "Tom Scarberry"
+date: "9/23/2020"
+output: pdf_document
+---
+
+
+
+##load UniversalBank file and see column names and summary data
+
+``` {r}
+bank_full_all <- read.csv("UniversalBank.csv")
+colnames(bank_full_all)
+summary(bank_full_all)
+head(bank_full_all)
+class(bank_full_all$Personal.Loan)
+str(bank_full_all)
+```
+##load libraries
+
+```{r}
+library(dplyr)
+library(caret)
+library(gmodels)
+library(ISLR)
+library(lattice)
+library(ggplot2)
+library(FNN)
+library(e1071)
+library(corrplot)
+```
+### create dummy variables for Education and Family
+
+```{r}
+library(fastDummies)
+bank_fulla<-dummy_cols(bank_full_all,select_columns ='Education')
+
+bank_full<-dummy_cols(bank_fulla,select_columns ='Family')
+summary (bank_full)
+```
+
+
+
+
+
+
+
+## create database without ID and Zip Code variables
+
+```{r}
+bank<-select(bank_full,Personal.Loan, CD.Account, Education_1, Education_2, Education_3, Family_1, Family_2, Family_3, Family_4, Securities.Account, CreditCard, Online, Income, CCAvg, Mortgage, Age, Experience, )
+summary(bank)
+
+```
+
+
+##partition data into training and validation sets
+```{r}
+set.seed(12)
+Train_Index=createDataPartition(bank$Personal.Loan,p=0.6, list=FALSE)
+Train_Data=bank[Train_Index,]
+Test_Data=bank[-Train_Index,]
+
+summary(Train_Data$Personal.Loan)
+summary(Test_Data$Personal.Loan)
+
+
+```
+###plot the data
+
+```{r}
+ggplot(Train_Data, aes(x=Income,y=CCAvg, color=Personal.Loan)) +geom_point()
+
+ggplot(Test_Data, aes(x=Income,y=CCAvg, color=Personal.Loan)) +geom_point()
+
+ggplot(Train_Data, aes(x=Income,y=Mortgage, color=Personal.Loan)) +geom_point()
+
+ggplot(Train_Data, aes(x=CCAvg,y=Mortgage, color=Personal.Loan)) +geom_point()
+
+```
+
+#normalize the data 
+```{r}
+train.norm.df<-Train_Data
+test.norm.df<-Test_Data
+
+test_z_norm<-preProcess(Train_Data[ ,13:17],method = c("center","scale"))
+
+train.norm.df[, 13:17]<-predict(test_z_norm, Train_Data[13:17])
+test.norm.df[, 13:17]<-predict(test_z_norm, Test_Data[13:17])
+
+summary(train.norm.df)
+
+```
+
+
+##k-NN set up 
+
+```{r}
+Train.Predictors <-train.norm.df[,2:17]
+Test.Predictors <- test.norm.df[,2:17]
+
+
+Train.Labels <-factor(train.norm.df[,1])
+Test.Labels <-factor(test.norm.df[,1])
+class(Test.Labels)
+summary(Train.Labels)
+summary(Test.Labels)
+
+```
+## train knn model with k=1
+
+```{r}
+##k=1
+c1<-Train.Labels
+Predicted.Test.Labels <- knn (Train.Predictors, Test.Predictors, c1, k=1, prob = TRUE )
+CrossTable(x=Test.Labels,y=Predicted.Test.Labels)
+```
+## knn model with k of 1 has fairly high precision scoring 89%, but low recall (sensitivity) with a score of 65%.  This model generally errors on the the side of falsely predicting a no for the personal loan acceptance, when the customer would accept the loan.  That will lead to lost revenue opportunities for the bank.   
+ 
+
+
+```{r}
+summary(bank)
+
+```
+
+
+## combine training and test data and renormalize the data
+``` {r}
+bank_norm_df<-bank
+bank_z_norm<-preProcess(bank[13:17], method=c("center", "scale"))
+
+bank_norm_df[,13:17]<-predict(bank_z_norm, bank[13:17])
+
+summary(bank_norm_df)
+
+```
+
+##k-NN set up 
+```{r}
+Bank_Predictors <-bank_norm_df[,2:17]
+
+Bank_Labels <-factor(bank_norm_df[,1])
+
+summary(Bank_Predictors)
+summary(Bank_Labels)
+```
+
+
+## New Customer set up
+```{r}
+
+Personal.Loan<- c(0)
+CD.Account<- c(0)
+Education_1<- c(0)
+Education_2<- c(1)
+Education_3<- c(0)
+Family_1<- c(0)
+Family_2<- c(1)
+Family_3<- c(0)
+Family_4<- c(0)
+Securities.Account<- c(0)
+CreditCard<- c(1)
+Online<- c(1)
+Income<- c(84)
+CCAvg<- c(2)
+Mortgage<- c(0)
+Age<- c(40)
+Experience<- c(10)
+
+New_Customer_1 <- data.frame(Personal.Loan, CD.Account, Education_1, Education_2, Education_3, Family_1, Family_2, Family_3, Family_4, Securities.Account, CreditCard, Online, Income, CCAvg, Mortgage, Age, Experience)
+ str(New_Customer_1)
+```
+ 
+ 
+ 
+## normalize new customer
+```{r}
+
+New_Customer_1_norm <- New_Customer_1
+New_Customer_1_norm[,13:17]<-predict(bank_z_norm, New_Customer_1[13:17])
+summary(New_Customer_1_norm)
+New_Customer_1_norm
+
+New_customer_loan<-factor(c("0","1"))
+str(New_customer_loan)
+
+```
+
+```{r}
+summary(New_customer_loan)
+```
+##run knn model k=1 for new customer evaluation
+
+```{r}
+##k=1
+c1<-Bank_Labels
+New_customer_loan <- knn (Bank_Predictors, New_Customer_1_norm[2:17], c1, k=1, prob = TRUE )
+New_customer_loan
+```
+
+```{r}
+print(New_customer_loan[1])
+```
+## The customer should not be a target for the marketing effort as they are unlikely to accept the loan offer
+
+## Choosing a k value of 1 allows for significant noise in the knn prediction algorithm because if will find only the one closest value and even if that value is surrounded by other values that lead to a different prediction, the prediction will come back matching the outcome of the closest data point
+
+## Choosing a larger value of k will eliminate the noise of one variable as the higher the k value the more searching for close values and the aggregate of those outcomes will be utilized for the predicted outcome
+
+## Confustion matrix to identify most accurate k for knn model
+
+```{r}
+c1<-Train.Labels
+
+accuracy.df<- data.frame(k=seq(1,20,1), accuracy = rep(0,20))
+
+for (i in 1:20) {
+  knn.pred <- knn(Train.Predictors, Test.Predictors, 
+              c1, k=i, prob=TRUE)
+  accuracy.df[i,2]<- confusionMatrix(knn.pred,Test.Labels)$overall[1]
+}
+accuracy.df
+
+```
+
+
+## The best k is 3 with an accuracy of 0.9620 from the confusionMatrix
+```{r}
+##k=3
+c1<-Train.Labels
+Predicted.Test.Labels <- knn (Train.Predictors, Test.Predictors, c1, k=3, prob = TRUE )
+CrossTable(x=Test.Labels,y=Predicted.Test.Labels)
+```
+
+## The most accuracy for k value minimizes the false positive values, which is described as high precision with a score of 96%.  However, the model has low recall (sensitivity) because it predicts 72 negative outcomes that are in fact positive outcomes.  The recall % is only 60% for the model. 
+## However, for a bank marketing campaign it would be wiser to use k=1 for knn modeling because it captures more true positives with only slightly higher false positives and the cost of sending marketing material vs. profitability of new loans would more than off set sending the additional marketing material to a few customers that ultimately turn down the loan.  Comparing the results from k=1 to k=3, the bank would capture 8 more personal loan customers while sending material to 11 individuals that would ultimately not take the loans.
+
+
+```{r}
+##k=1
+c1<-Bank_Labels
+New_customer_loan_a <- knn (Bank_Predictors, New_Customer_1_norm[2:17], c1, k=3, prob = TRUE)
+New_customer_loan_a
+```
+
+```{r}
+print(New_customer_loan_a[1])
+```
+## Re-running the knn with k=3 (most accurate model) returns the same result of do not market to this banking customer for a personal loan, as the model is more selective in terms of who it markets to than the k=1 knn model.
+
+##partition data into training, validation, and test sets
+```{r}
+set.seed(15)
+Train_Index_1=createDataPartition(bank$Personal.Loan, p=0.5, list=FALSE)
+Train_Data_1=bank[Train_Index_1,]
+Remaining_Data_a=bank[-Train_Index_1,]
+
+Train_Index=createDataPartition(Remaining_Data_a$Personal.Loan, p=0.6, list=FALSE)
+Validation_Data_1=Remaining_Data_a[Train_Index,]
+Test_Data_1=Remaining_Data_a[-Train_Index,]
+
+
+
+summary(Train_Data_1$Personal.Loan)
+summary(Validation_Data_1$Personal.Loan)
+summary(Test_Data_1$Personal.Loan)
+
+
+```
+
+#normalize the data with Test Data
+```{r}
+train.norm.1.df<-Train_Data_1
+validation.norm.1.df<-Validation_Data_1
+
+test_1_z_norm<-preProcess(Train_Data_1[ ,13:17],method = c("center","scale"))
+
+train.norm.1.df[, 13:17]<-predict(test_1_z_norm, Train_Data_1[13:17])
+validation.norm.1.df[, 13:17]<-predict(test_1_z_norm, Validation_Data_1[13:17])
+
+summary(train.norm.1.df)
+summary(validation.norm.1.df)
+```
+
+
+##knn model with Training and Validation data (k=3)
+
+```{r}
+##k=3
+Train.Labels.1<-Train_Data_1[,1]
+Validation.Labels.1<-Validation_Data_1[,1]
+Train.Predictors.1<-Train_Data_1[,2:17]
+Validation.Predictors.1<-Validation_Data_1[,2:17]
+c1<-Train.Labels.1
+Predicted.Test.Labels.1 <- knn (Train.Predictors.1, Validation.Predictors.1, c1, k=3, prob = TRUE )
+CrossTable(x=Validation.Labels.1,y=Predicted.Test.Labels.1)
+
+```
+##Combine training and Validation Data
+```{r}
+Train.Validation.Data<-rbind(Train_Data_1, Validation_Data_1)
+summary(Train.Validation.Data)
+
+```
+
+
+
+
+
+#re-normalize the data based on Training and Validation data
+```{r}
+train.validation.norm.df<-Train.Validation.Data
+test.norm.1.df<-Test_Data_1
+
+test_validation_z_norm<-preProcess(Train.Validation.Data[ ,13:17],method = c("center","scale"))
+
+train.validation.norm.df[, 13:17]<-predict(test_validation_z_norm, Train.Validation.Data[13:17])
+test.norm.1.df[, 13:17]<-predict(test_z_norm, Test_Data_1[13:17])
+
+summary(train.validation.norm.df)
+summary(test.norm.1.df)
+```
+
+##knn model with Training/ Validation and Test data
+
+```{r}
+##k=3
+Train.Validation.Labels.1<-Train.Validation.Data[,1]
+Test.Labels.2<-Test_Data_1[,1]
+Train.Validation.Predictors.1<-train.validation.norm.df[,2:17]
+Test.Predictors.1<-test.norm.1.df[,2:17]
+c1<-Train.Validation.Labels.1
+Predicted.Test.Labels.1 <- knn (Train.Validation.Predictors.1, Test.Predictors.1, c1, k=3, prob = TRUE )
+CrossTable(x=Test.Labels.2,y=Predicted.Test.Labels.1)
+
+```
+
+## Comparing confusion matrix of test set with training and validation set: The Test set is more accurate overall than the training set, but predicts less true positive results than the training set (51 vs. 60).  In the business world a small number of false positives (Precision) on a marketing campaign is a far better outcome than a high number of false negatives (Recall or Sensitivity) as the cost of marketing campaigns (often by mail or the internet) are far less costly than the value captured by gaining a new customer transaction, in this case a personal loan.  The incremental gain of the 9 new customers (represented by the difference in confirmed positives) will likely outweigh the cost of the 75 customers that receive marketing material but do not accept the personal loans.  
+##As the k for the knn model increases it becomes more selective with the positive outcomes because the negative outcomes of the overall population is ~90%.  Therefore, as more neighbors are utilized to make the determination the likelyhood of a negative outcome becomes more likely and eventually a high enough k value would lead to all negative outcomes as most of the results are negative within the entire data set.
