@@ -1,0 +1,116 @@
+---
+title: "Machine Learning - Assignment 3"
+author: "Tom Scarberry"
+date: "10/13/2020"
+output: pdf_document
+---
+##load Flight Delays data and view summary information and load R libraries
+```{r}
+Delays.all<-read.csv("FlightDelays.csv")
+summary(Delays.all)
+library(caret)
+library(ISLR)
+library(naivebayes)
+
+```
+
+## Create new data frame with five predictors and identify the variable types to check if factors or other variable types
+```{r}
+library(dplyr)
+Delays<-select(Delays.all, Flight.Status, DAY_WEEK, CRS_DEP_TIME, ORIGIN,DEST, CARRIER)
+summary(Delays)
+str(Delays)
+
+```
+## Create bins for flight departure times
+```{r}
+Delays.bin<-Delays
+Delays.bin[,3]<-round(Delays$CRS_DEP_TIME/100, digit=0)
+str(Delays.bin$CRS_DEP_TIME)
+
+
+```
+
+## Convert all data variables to factors for Naive Bayes model
+```{r}
+Delays$Flight.Status<-as.factor(Delays$Flight.Status)
+Delays$DAY_WEEK<-as.factor(Delays$DAY_WEEK)
+Delays$CRS_DEP_TIME<-as.factor(Delays.bin$CRS_DEP_TIME)
+Delays$ORIGIN<-as.factor(Delays$ORIGIN)
+Delays$DEST<-as.factor(Delays$DEST)
+Delays$CARRIER<-as.factor(Delays$CARRIER)
+summary(Delays)
+
+```
+
+## Divide the data into 60% training and 40% validation data sets
+
+```{r}
+set.seed(20)
+train.index<-createDataPartition(Delays$Flight.Status,p=0.6, list=FALSE)
+train.data<-Delays[train.index,]
+validation.data<-Delays[-train.index,]
+summary(train.data$Flight.Status)
+summary(validation.data$Flight.Status)
+
+```
+## Build Naive Bayes model with training data
+```{r}
+model.train<-naive_bayes(Flight.Status~DAY_WEEK+CRS_DEP_TIME+ORIGIN+DEST+CARRIER,data=train.data)
+model.train
+
+```
+
+
+## Output both a count table and proportion table of how many and what proportion of flights were delayed and ontime at the three airports for training data set
+```{r}
+table(train.data$Flight.Status, train.data$DEST)
+prop.table(table(train.data$Flight.Status, train.data$DEST), margin = 1)
+
+```
+## LGA has the highest percentage delays with 44% of the total flights delayed and the highest total delays at 113, but LGA also has the highest total number of flights of the three airports for the training data set.
+
+## Output both a count table and proportion table of how many and what proportion of flights were delayed and ontime at the three airports for entire data set
+
+```{r}
+table(Delays$Flight.Status, Delays$DEST)
+prop.table(table(Delays$Flight.Status, Delays$DEST), margin = 1)
+
+```
+
+## LGA has the highest percentage delays with 43% of the total flights delayed and the highest total delays at 183, but LGA also has the highest total number of flights of the three airports for the total data set.
+
+## Run the Naive Bayes model with the validation data
+## View Confusion matrix
+
+```{r}
+predict.delays<-predict(model.train,validation.data)
+library(gmodels)
+CrossTable(x=validation.data$Flight.Status, y=predict.delays,prop.chisq=FALSE)
+
+```
+## Accuracy for the is 80% for the model, which is not very accurate for a Confusion Matrix.  The model has low precision (82%) and high recall (sensitivity) with a score of (96%).  The model predicts most flights as on time because that is the higher percentage likelyhood of occuring and thus the model performs poorly on correctly identifying delayed flights. This will lead to flyers expecting to be on time, but becoming unhappy when the flight is delayed.
+
+
+## Convert the model to raw prediction to output for the ROC graph for the validation data
+```{r}
+predict.delays.raw<-predict(model.train,validation.data, type="prob")
+library(pROC)
+summary(predict.delays.raw)
+head(predict.delays.raw)
+roc(validation.data$Flight.Status,predict.delays.raw[,2])
+plot.roc(validation.data$Flight.Status,predict.delays.raw[,2])
+
+```
+
+## AUC value is 0.658 and ROC plot is shown.  The AUC value is better closer to 1 and the ROC plot is best if it plots the curve close to the top left corner of the chart.  
+
+
+
+
+
+
+
+
+
+
