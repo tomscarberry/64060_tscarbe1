@@ -1,0 +1,156 @@
+---
+title: "Machine Learning Assignment 4"
+author: "Tom Scarberry"
+date: "11/1/2020"
+output: pdf_document
+---
+
+## Load and do an initial check of the data top and bottom six rows and summary information for the data file
+```{r}
+All.rankings<-read.csv("Universities.csv")
+head(All.rankings)
+tail(All.rankings)
+summary(All.rankings)
+
+```
+
+## Change Public and Private variable from integer to a factor with two selection options 1 or 2.  Normalize continuous variables and check the variable type loaded from the csv file.  
+```{r}
+str(All.rankings)
+All.rankings[,3]<-as.factor(All.rankings[,3])
+str(All.rankings)
+library(caret)
+z.norm<-preProcess(All.rankings[ ,4:20], method= c("center","scale"))
+rankings.norm<-All.rankings
+rankings.norm[,4:20]<-predict(z.norm,All.rankings[,4:20])
+summary(rankings.norm)
+```
+
+## Remove missing records from the both original and normalized data frames.
+```{r}
+library(tidyverse)
+rankings<-rankings.norm%>%drop_na()
+rankings.values<-All.rankings%>%drop_na()
+
+```
+
+## Initial k means cluster of 6, then use elbow method to find the turning point using total within-cluster sum of square (WSS) value.  The best choice is where the elbow turns to the right for the optimal number of clusters - 3 clusters.
+
+```{r}
+library(factoextra)
+set.seed(20)
+k.rankings<-kmeans(rankings[4:20],centers=6,nstart = 25)
+fviz_cluster(k.rankings, data = rankings[4:20])
+fviz_nbclust(rankings[4:20],kmeans, method = "wss")
+
+```
+
+## The Silhouette method confirms the optimal # of clusters should be 3  
+
+```{r}
+fviz_nbclust(rankings[4:20],kmeans, method = "silhouette")
+
+```
+
+## The Elbow and Silhouette method both confirm the optimal number of clusters is 3, below is the k-means cluster with 3 clusters.  Additionally the center values and size of the clusters are displayed.
+
+```{r}
+k.rankings.3<-kmeans(rankings[4:20],centers=3,nstart = 25)
+fviz_cluster(k.rankings.3, data = rankings[4:20])
+k.rankings.3$centers
+k.rankings.3$size
+
+```
+## Cluster 2 is the largest with 276 Universities, followed by Cluster 3 with 149 and Cluster 1 with 46.
+
+## Pull cluster results into original data values in order to compare summary statistics for each cluster and convert the variable to a factor.
+## I will use mean value of several of the data variables to describe each cluster of universities.
+
+```{r}
+
+rankings.clusters<-cbind(rankings.values,k.rankings.3$cluster)
+rankings.clusters$`k.rankings.3$cluster`<-as.factor(rankings.clusters$`k.rankings.3$cluster`)
+
+Cluster.means<-rankings.clusters%>%
+  group_by(`k.rankings.3$cluster`)%>%
+  summarise(Mean_Out_Tuition=mean(out.of.state.tuition),
+            Mean_In_Tuition=mean(in.state.tuition),
+            Mean_Applications=mean(X..appli..rec.d),
+            Mean_Accepted=mean(X..appl..accepted),
+            Mean_Enrolled=mean(X..new.stud..enrolled),
+            Mean_Top_10=mean(X..new.stud..from.top.10.),
+            Mean_Top_25=mean(X..new.stud..from.top.25.),
+            Mean_FT_Undergrad=mean(X..FT.undergrad),
+            Mean_PT_Undergrad=mean(X..PT.undergrad),
+            Mean_Room=mean(room),
+            Mean_Board=mean(board),
+            Mean_Additional_Fee=mean(add..fees),
+            Mean_Book_Cost=mean(estim..book.costs),
+            Mean_Personal_Cost=mean(estim..personal..),
+            Mean_Faculty_Phd=mean(X..fac..w.PHD),
+            Mean_Stud_Fac_Ratio=mean(stud..fac..ratio),
+            Mean_Grad_Rate=mean(Graduation.rate))
+Cluster.means
+
+```
+
+## Cluster 1 has the lowest in state  tuition but average out of state tuition, an average acceptance rate, the largest number of students enrolling every year, and an average number of top 10 & 25 students (lowest from a % of students enrolled perspective).
+ 
+## Cluster 2 has mid priced out and in state tuition, a better than average acceptance rate, the smallest students enrolling every year, and the smallest number of top 10 & 25 students (average from a % of students enrolled).
+
+## Cluster 3 has the highest tuition for both in state and out of state students, the lowest acceptance rate, an average number of students enrolling every year, and the largest number of top 10 & 25 students (highest % of students enrolled).
+
+
+## Create charts to assess the categorical measurements and relationships to the three clusters
+```{r}
+library(esquisse)
+library(ggplot2)
+
+ggplot(rankings.clusters) +
+ aes(x = `k.rankings.3$cluster`, fill = Public..1...Private..2.) +
+ geom_bar() +
+ scale_fill_hue() +
+ theme_minimal()
+
+ggplot(rankings.clusters) +
+ aes(x = State, fill = `k.rankings.3$cluster`) +
+ geom_bar() +
+ scale_fill_hue() +
+ theme_minimal()
+```
+
+## Most States have a high % of cluster 2 schools, which is a blend of private and public universities with mid priced tuition and average acceptance and top student %.
+
+## The second most prevelant type of school is cluster 3, which is predominately private schools with high tuition and lower acceptance rates.
+
+## The least represented across all states is cluster 1, which is predominately public schools with low in state tuition.
+
+## While the cluster of shool types are represented fairly proportionally across all the states, it is clear that cluster 1 is generally a public school and cluster 3 is generally a private school.  Cluster 2 has a blend of public and private schools included.
+
+## There are several other student factors that could be considered when clustering universities that may help improve the results.  Those factors include: ACT scores, SAT scores, ethnicity, high school GPA, and high school type (e.g. public).  Other factors that could be included on the universities include: % employment upon graduation, % employeed 3 months post graduation, avg. starting salary for employment, avg. class size, and avg. scholarship value. 
+
+
+## Evaluate Tufts vs the center values for three clusters to determine closest cluster
+```{r}
+Tufts<-rankings.norm[476,]
+Cluster1.mean<-k.rankings$centers[1,]
+Cluster2.mean<-k.rankings$centers[2,]
+Cluster3.mean<-k.rankings$centers[3,]
+Tufts.1<-rbind(Tufts[,4:20],Cluster1.mean)
+Tufts.2<-rbind(Tufts[,4:20],Cluster2.mean)
+Tufts.3<-rbind(Tufts[,4:20],Cluster3.mean)
+dist(Tufts.1, method = "euclidean")
+dist(Tufts.2, method = "euclidean")
+dist(Tufts.3, method = "euclidean")
+```
+## Tufts is closest to cluster 2 with the lowest distance measurement vs. the cluster center values for each numerical variable
+
+## Replace missing value in Tufts data with cluster 2 mean value
+``` {r}
+Tufts.new<-Tufts
+is.na(Tufts)
+Tufts.new[,10]<-k.rankings$center[2,7]
+Tufts.new
+
+```
+## After identifying the missing value as PT undergrad, identified column and replaced with the Cluster 2 center value for the cluster
