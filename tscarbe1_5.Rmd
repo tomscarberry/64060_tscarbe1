@@ -1,0 +1,151 @@
+---
+title: "Machine Learning - Assignment 5"
+author: "Tom Scarberry"
+date: "11/11/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## I have created comments where code was created and utilized, but I have excluded the output from the knit file.
+
+## Load cereals data and check (code and result excluded from output)
+
+## Assign cereal names as row names (code and result excluded from output)
+
+```{r, include=FALSE}
+library(tidyverse)
+cereals1<-read.csv("Cereals.csv")
+cereals<-column_to_rownames(cereals1,var = "name")
+head(cereals)
+tail(cereals)
+summary(cereals)
+cereals$shelf<-as.factor(cereals$shelf)
+cereals$type<-as.factor(cereals$type)
+
+str(cereals)
+```
+
+## Normalize the data with all data in original file and confirm normalization of the data
+
+```{r} 
+library(caret)
+cereals.z.norm<-preProcess(cereals[ ,3:11 & 13:15], method = c("center","scale"))
+cereals.norm<-cereals
+cereals.norm<-predict(cereals.z.norm,cereals.norm[ ,3:11 & 13:15])
+summary(cereals.norm)
+
+
+```
+
+## Remove missing values
+
+```{r} 
+library(tidyverse)
+cereals.norm.no.na<-cereals.norm%>%drop_na()
+```
+
+
+```{r, include=FALSE}
+summary(cereals.norm.no.na)
+
+```
+
+## Apply hierarchical clustering using euclidean distance.  Ward method is the best option of agnes clustering approach as it has the highest value for the agglomerative coefficient of the different approaches evaluated (single, complete, average, or ward).  Create dendrogram visual of the ward approach. 
+
+## Create a new variable that identifies the assigned cluster for each cereal for comparison later in the stability analysis.
+
+```{r} 
+library(cluster)
+library(factoextra)
+
+cereals.single<-agnes(cereals.norm.no.na[ ,3:11 & 13:15], metric = "euclidean", method = "single")
+cereals.complete<-agnes(cereals.norm.no.na[ ,3:11 & 13:15], metric = "euclidean", method = "complete")
+cereals.average<-agnes(cereals.norm.no.na[ ,3:11 & 13:15], metric = "euclidean", method = "average")
+cereals.ward<-agnes(cereals.norm.no.na[ ,3:11 & 13:15], metric = "euclidean", method = "ward")
+
+cereals.single$ac
+cereals.complete$ac
+cereals.average$ac
+cereals.ward$ac
+
+pltree(cereals.ward, cex =0.6, hang =-1, main = "Dendrogram of Ward Approach")
+rect.hclust(cereals.ward,k=6, border = 1:6)
+cereal.cluster<-cutree(cereals.ward, k=6)
+cereals.ward.cluster<-cbind(cereals.norm.no.na,cereal.cluster)
+cereals.ward.cluster$cereal.cluster<-as.factor(cereals.ward.cluster$cereal.cluster)
+
+
+
+```
+
+## Hierarchical Clustering starts grouping the two closest points together by distance into clusters until all points eventually make one cluster.  It uses the data itself to create the clusters and as more clusters are made, the model creates a hierarchical visual that helps the modeler chose the number of clusters based on distance of the clusters (and thus corresponding data points) from one another.  The model will always achieve the same result as long as the same method of modeling is selected, unlike K-means.
+
+## K-means identifies cluster centroid points and then begins to identify points close to the centroids to create clusters.  For K-means the user must identify to the number of clusters and the model seeks to minimize the sum of distances between the data and chosen centroid.  The model works using a stochastic process, so varying cluster centroid locations can create variance in the model when run at different times.
+
+
+## Using the Dendrogram, I would select six clusters using a distance of approximately 12 from the scale on the ward dendrogram graphic.
+
+##-----------------------------------------------------------------------------------------------------
+
+## Partition the data and check stability by adding the new cluster identification data to the partitioned data set and comparing the clusters to identify whether clusters stay the same or change with the smaller data sample.  Create new dendrogram of ward approach of the data subset.
+
+```{r} 
+library(groupdata2)
+set.seed(123)
+Train.index=createDataPartition(cereals.ward.cluster$shelf, p=0.9, list=FALSE)
+cereals.stability=cereals.ward.cluster[Train.index,]
+
+
+cereals.ward.stability<-agnes(cereals.stability[ ,3:11 & 13:15], metric = "euclidean", method = "ward")
+cereals.ward.stability$ac
+pltree(cereals.ward.stability, cex =0.6, hang =-1, main = "Dendrogram of Ward Approach Stability check")
+rect.hclust(cereals.ward.stability,k=6, border = 1:6)
+
+cereal.cluster.s<-cutree(cereals.ward.stability, k=6)
+cereals.ward.stability<-cbind(cereals.stability,cereal.cluster.s)
+cereals.ward.stability$cereal.cluster.s<-(cereals.ward.stability$cereal.cluster.s)
+
+cereals.ward.stability%>%group_by(cereal.cluster)%>%
+  summarise(Cluster.match=n_distinct(cereal.cluster.s),
+            Cluster.mean=mean(cereal.cluster.s),
+            cluster.sd=sd(cereal.cluster.s))
+
+cereals.ward.stability$cereal.cluster<-as.integer(cereals.ward.stability$cereal.cluster)
+
+check<-ifelse(cereals.ward.stability$cereal.cluster==cereals.ward.stability$cereal.cluster.s, "True", "False")
+check.df<-as.data.frame(check)
+
+check.df$check<-as.factor(check.df$check)
+
+summary(check.df)
+
+```
+
+## The model's structure is stable as all cereals stay in the initial clusters after pulling a sample of 90% of the original cereals and re-doing the clusters with the ward approach.       
+
+##--------------------------------------------------------------------------------------------
+
+## Create a summary table of the key information for identification of the healthy cereal choices for the elementary school using the six clusters identified in the ward hierarchical model.
+
+```{r} 
+Healthly.cereals.a<-cereals.ward.cluster%>%group_by(cereal.cluster)%>%
+  summarise(Fat=mean(fat),
+            Sodium=mean(sodium),
+            Sugar=mean(sugars),
+            Fiber=mean(fiber),
+            Potassium=mean(potass),
+            Vitamins=mean(vitamins))
+
+Healthly.cereals.a
+
+```
+## First select the criteria desired to determine the healthiest cereal cluster.  For this evaluation I will evaluate cereals where lower: fat, sodium, and sugar are healthier options and where higher: fiber, potassium, and vitamins are healthier options.  The result of this evaluation leads to cluster 1 being the healthiest choices.  While 1 is a bit high in sodium and below average for vitamins, it offers better than average values for the remainder of the selected criteria with especially high values for fiber and potassium.  This will allow kids to start their school day off well.
+
+## The data should be normalized for the cluster analysis, otherwise it would be subject to the scale for each variable and a variable with much higher values can skew the model results.    
+
+## In order to compare the two cluster model results, a modeler could run a Hierarchical clustering model and select the number of clusters  and then use the number of clusters (starts for the k-means algorithm) as in input into k-means clusters to evaluate the similarities/differences of the resulting clusters.   
+
+## Hierarchical clustering is more a consistent modeling approach and allows a visual (dendrogram) that easily identifies various clustering options based on distance within or between clusters as you evaluate higher and higher level clusters within the hierarchy.  K-means models are variable between executions with the initial selection of the centroid locations.
