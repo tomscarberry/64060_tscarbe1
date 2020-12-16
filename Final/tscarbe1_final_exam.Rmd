@@ -1,0 +1,323 @@
+---
+title: "Machine Learning - Final Exam"
+author: "Tom Scarberry"
+date: "12/8/2020"
+output: pdf_document
+---
+
+# Problem Identification
+
+## CRISA marketing firm wishes to segment customers that would be optimal to target for direct-mail promotions in order to drive the greatest level of usage for this promotion by the customers.  
+
+## Using a customer data set of 600 with a variety of demographic and product purchase information, the objective is to determine the optimal segmentation of these customers for the direct-mail promotions.
+
+# Data preparation and transformation for cluster analysis
+
+## Load the data and view summary of the data (code and output excluded from the knit file).
+```{r include=FALSE}
+
+data <- read.csv('BathSoap.csv')
+
+summary(data)
+
+```
+
+## Convert all information that is currently a character including "%" sign into a numercal value that represents that % as a decimal number.  This includes most of the behavior and basis for purchase variables (code and output excluded from the knit file). 
+
+```{r include=FALSE}
+data1<-data
+data1$Pur.Vol.No.Promo....<-as.numeric(gsub("[\\%,]","", data$Pur.Vol.No.Promo....))/100
+data1$Pur.Vol.Promo.6..<-as.numeric(gsub("[\\%,]","", data$Pur.Vol.Promo.6..))/100
+data1$Pur.Vol.Other.Promo..<-as.numeric(gsub("[\\%,]","", data$Pur.Vol.Other.Promo..))/100
+data1$Br..Cd..57..144<-as.numeric(gsub("[\\%,]","", data$Br..Cd..57..144))/100
+data1$Br..Cd..55<-as.numeric(gsub("[\\%,]","", data$Br..Cd..55))/100
+data1$Br..Cd..272<-as.numeric(gsub("[\\%,]","", data$Br..Cd..272))/100
+data1$Br..Cd..286<-as.numeric(gsub("[\\%,]","", data$Br..Cd..286))/100
+data1$Br..Cd..24<-as.numeric(gsub("[\\%,]","", data$Br..Cd..24))/100
+data1$Br..Cd..481<-as.numeric(gsub("[\\%,]","", data$Br..Cd..481))/100
+data1$Br..Cd..352<-as.numeric(gsub("[\\%,]","", data$Br..Cd..352))/100
+data1$Br..Cd..5<-as.numeric(gsub("[\\%,]","", data$Br..Cd..5))/100
+
+data1$Others.999<-as.numeric(gsub("[\\%,]","", data$Others.999))/100
+data1$Pr.Cat.1<-as.numeric(gsub("[\\%,]","", data$Pr.Cat.1))/100
+data1$Pr.Cat.2<-as.numeric(gsub("[\\%,]","", data$Pr.Cat.2))/100
+data1$Pr.Cat.3<-as.numeric(gsub("[\\%,]","", data$Pr.Cat.3))/100
+data1$Pr.Cat.4<-as.numeric(gsub("[\\%,]","", data$Pr.Cat.4))/100
+
+data1$PropCat.5<-as.numeric(gsub("[\\%,]","", data$PropCat.5))/100
+data1$PropCat.6<-as.numeric(gsub("[\\%,]","", data$PropCat.6))/100
+data1$PropCat.7<-as.numeric(gsub("[\\%,]","", data$PropCat.7))/100
+data1$PropCat.8<-as.numeric(gsub("[\\%,]","", data$PropCat.8))/100
+data1$PropCat.9<-as.numeric(gsub("[\\%,]","", data$PropCat.9))/100
+data1$PropCat.10<-as.numeric(gsub("[\\%,]","", data$PropCat.10))/100
+data1$PropCat.11<-as.numeric(gsub("[\\%,]","", data$PropCat.11))/100
+data1$PropCat.12<-as.numeric(gsub("[\\%,]","", data$PropCat.12))/100
+data1$PropCat.13<-as.numeric(gsub("[\\%,]","", data$PropCat.13))/100
+data1$PropCat.14<-as.numeric(gsub("[\\%,]","", data$PropCat.14))/100
+data1$PropCat.15<-as.numeric(gsub("[\\%,]","", data$PropCat.15))/100
+
+```
+
+## Transform some of the data before running the k-means algorithm.
+
+## Brand loyalty transformation - identify highest brand loyalty among all brands and record highest value to use for the analysis. This will identify those customers with brand loyalty without regard to the brand itself.
+
+```{r}
+brand.max<-apply(data1[23:30], 1, max)
+
+hist(brand.max)
+brand.max<-as.data.frame(brand.max)
+
+```
+
+## Histogram shows customer set is skewed towards low brand loyalty overall.
+
+## Price sensitivity transformation is next - representing how frequently a customer purchases on a promotion - combine Purchase with promotion 6 and other; eliminating Purchase price no discount as it is simply the inverse of this transformed value.
+
+```{r}
+price.sensitivity<-apply(data1[21:22], 1, sum)
+
+hist(price.sensitivity)
+price.sensitivity.df<-as.data.frame(price.sensitivity)
+
+```
+
+## Histogram shows customer set is generally not price sensitive and typically buys without a discount.
+
+## Add new transformed data (brand loyalty and price sensitivity) to the data frame (code excluded from the knit file).
+
+```{r include=FALSE}
+data.combine<-data1
+data.combine<-cbind(data1,brand.max)
+data.combine<-cbind(data.combine,price.sensitivity.df)
+summary(data.combine)
+
+```
+
+## Normalize all the numeric data that will be used for k-means model (code excluded from the knit file).
+
+```{r include=FALSE}
+library(caret)
+z.norm<-preProcess(data.combine[ ,12:48], method= c("center","scale"))
+data.norm<-data.combine
+data.norm[,12:48]<-predict(z.norm,data.combine[ ,12:48])
+
+
+```
+
+## Eliminate unused data columns from the data frames for k-means cluster analysis (code excluded from knit file).
+
+```{r include=FALSE}
+data.behavior<-data.norm[,c(1,12:15,17,19,47)]
+data.basis<-data.norm[,c(1,32:35,48)]
+data.all<-data.norm[,c(1,12:15,17,19,32:35,47:48)]
+
+library(factoextra)
+
+```
+
+# Cluster Development
+
+## Use k-means to segment the customers using behavior data.
+
+```{r}
+
+set.seed(20)
+k.rankings.behavior<-kmeans(data.behavior[,2:8],centers=3,nstart = 25)
+fviz_cluster(k.rankings.behavior, data = data.behavior[,2:8])
+fviz_nbclust(data.behavior[,2:8],kmeans, method = "wss")
+fviz_nbclust(data.behavior[,2:8],kmeans, method = "silhouette")
+
+```
+
+## Cluster plot shows three clusters which was determined from review of the elbow and Silhouette evaluation charts.  This is favorable as between 2-5 segments is the target for the marketing program.
+
+## Next use k-means to segment the customer using basis data.
+
+```{r}
+set.seed(20)
+k.rankings.basis<-kmeans(data.basis[,2:6],centers=5,nstart = 25)
+fviz_cluster(k.rankings.basis, data = data.basis[,2:6])
+fviz_nbclust(data.basis[,2:6],kmeans, method = "wss")
+fviz_nbclust(data.basis[,2:6],kmeans, method = "silhouette")
+
+```
+
+## Cluster plot shows five clusters which was determined from review of the elbow and Silhouette evaluation charts.  While the elbow chart suggests six clusters, the silhouette graphic identifies five as the optimal number of clusters.  Five was selected as it is in the 2-5 segment target that is encouraged for the marketing program.
+
+## Final cluster model is K-means cluster using combined data for for both behavior and basis.
+
+ 
+```{r}
+set.seed(20)
+k.rankings.all<-kmeans(data.all[,2:13],centers=5,nstart = 25)
+fviz_cluster(k.rankings.all, data = data.all[,2:13])
+fviz_nbclust(data.all[,2:13],kmeans, method = "wss")
+fviz_nbclust(data.all[,2:13],kmeans, method = "silhouette")
+
+```
+
+## Cluster plot shows five clusters which was determined from review of the elbow and Silhouette evaluation charts.  While the silhouette chart suggests six clusters, the elbow chart suggests five clusters are appropriate before the line begins flattening more dramatically.  Additionally, the desired cluster range to support marketing program is between 2-5. 
+
+## Add clusters to a new data frame using original data values for further understanding the dynamics of the clusters (code excluded from knit file).
+
+``` {r echo=FALSE}
+data.segments<-data.combine
+data.segments<-cbind(data.segments,behavior.cluster = k.rankings.behavior$cluster)  
+data.segments<-cbind(data.segments,basis.cluster = k.rankings.basis$cluster)  
+data.segments<-cbind(data.segments,all.cluster = k.rankings.all$cluster)
+
+
+```
+
+## Convert cluster data to factors and review the number of customers within each cluster for behavior, basis, and combined clusters.  View the resulting cluster sizes for each model.  
+
+```{r}
+data.segments.all<-data.segments
+data.segments.all$behavior.cluster<-as.factor(data.segments.all$behavior.cluster)
+data.segments.all$basis.cluster<-as.factor(data.segments.all$basis.cluster)
+data.segments.all$all.cluster<-as.factor(data.segments.all$all.cluster)
+
+summary(data.segments.all[,49:51])
+```
+
+# Cluster Analysis
+
+## Behavior cluster segmentation identifies the largest cluster of any model with cluster 2 containing over half of the customers (320 total).
+
+## Basis cluster and combined all cluster segmentation both have five clusters with the basis cluster resulting in the second largest cluster overall at 304 customers.
+
+## Next, each cluster will be analyzed to understand the cluster attributes relevant for addressing the question of which group should the company target for a direct mail promotion.
+
+## For this analysis each cluster will be evaluated based on demographic, purchase behavior, brand loyalty, and price sensitivity attributes.
+
+## The first cluster model was developed using the basis variables.
+
+```{r}
+library(dplyr)
+Summary.basis.cluster<-data.segments.all%>%group_by(basis.cluster)%>%
+  summarise(Social.Class=mean(SEC),
+            Age=mean(AGE),
+            Education=mean(EDU),
+            Household.no=mean(HS),
+            Childeren=mean(CHILD),
+            Television=mean(CS),
+            Affluence.Index=mean(Affluence.Index),
+            No.Brands=mean(No..of.Brands),
+            Brand.Run=mean(Brand.Runs),
+            Volume=mean(Total.Volume),
+            Transactions=mean(No..of..Trans),
+            Trans.Brand.Run=mean(Trans...Brand.Runs),
+            Average.Price=mean(Avg..Price),
+            Brand.Loyaty=mean(brand.max),
+            Price.Sens=mean(price.sensitivity),
+            Price.Premium=mean(Pr.Cat.1),
+            Price.Popular=mean(Pr.Cat.2),
+            Price.Economy=mean(Pr.Cat.3),
+            Price.Generic=mean(Pr.Cat.4))
+            
+
+ Summary.basis.cluster
+
+```
+
+## Summary of the basis clusters:
+
+### Segment 1 is: highest affluent, avg. children and most education, low discount oriented, likely to purchase premium products, buys low volume, and has low brand loyalty
+### Segment 2 is: high affluent, low children and high education, the lowest discount oriented, likely to purchase popular products, buys high volume, and has high brand loyalty
+### Segment 3 is: low affluent, least children and low education, high discount oriented, likely to purchase genertic products, buys high volume, and has lowest brand loyalty
+### Segment 4 is: lowest affluent, high children and lowest education, low discount oriented, likely to purchase economy products, buys highest volume, and has highest brand loyalty
+### Segment 5 is: high affluent, most children and high education, the most discount oriented, likely to purchase premium/popular products, buys low volume, and has low brand loyalty
+
+## The next cluster is the behavior segmentation (excluded code from knit pdf).
+
+```{r echo=FALSE}
+ 
+Summary.behavior.cluster<-data.segments.all%>%group_by(behavior.cluster)%>%
+  summarise(Social.Class=mean(SEC),
+            Age=mean(AGE),
+            Education=mean(EDU),
+            Household.no=mean(HS),
+            Childeren=mean(CHILD),
+            Television=mean(CS),
+            Affluence.Index=mean(Affluence.Index),
+            No.Brands=mean(No..of.Brands),
+            Brand.Run=mean(Brand.Runs),
+            Volume=mean(Total.Volume),
+            Transactions=mean(No..of..Trans),
+            Trans.Brand.Run=mean(Trans...Brand.Runs),
+            Average.Price=mean(Avg..Price),
+            Brand.Loyaty=mean(brand.max),
+            Price.Sens=mean(price.sensitivity),
+            Price.Premium=mean(Pr.Cat.1),
+            Price.Popular=mean(Pr.Cat.2),
+            Price.Economy=mean(Pr.Cat.3),
+            Price.Generic=mean(Pr.Cat.4))
+            
+
+ Summary.behavior.cluster
+
+
+
+```
+## Summary of the behavior cluster: 
+
+### Segment 1 is: least affluent, most children and least education, the least discount oriented, likely to purchase economy products, buys high volume, and has high brand loyalty
+### Segment 2 is: less affluent, avg. children and avg. education, less discount oriented, likely to purchase premium/popular products, buys low volume, and has low brand loyalty
+### Segment 3 is: most affluent, least children and most education, the most discount oriented, likely to purchase premium/popular products, buys high volume, and has least brand loyalty
+
+## The final cluster is the combined segmentation (exclude code from knit pdf).
+
+```{r echo=FALSE}
+ 
+Summary.all.cluster<-data.segments.all%>%group_by(all.cluster)%>%
+  summarise(Social.Class=mean(SEC),
+            Age=mean(AGE),
+            Education=mean(EDU),
+            Household.no=mean(HS),
+            Childeren=mean(CHILD),
+            Television=mean(CS),
+            Affluence.Index=mean(Affluence.Index),
+            No.Brands=mean(No..of.Brands),
+            Brand.Run=mean(Brand.Runs),
+            Volume=mean(Total.Volume),
+            Transactions=mean(No..of..Trans),
+            Trans.Brand.Run=mean(Trans...Brand.Runs),
+            Average.Price=mean(Avg..Price),
+            Brand.Loyaty=mean(brand.max),
+            Price.Sens=mean(price.sensitivity),
+            Price.Premium=mean(Pr.Cat.1),
+            Price.Popular=mean(Pr.Cat.2),
+            Price.Economy=mean(Pr.Cat.3),
+            Price.Generic=mean(Pr.Cat.4))
+            
+
+ Summary.all.cluster
+
+
+
+
+
+```
+
+## Summary of the five segments of the combined cluster:
+
+### Segment 1 is: avg. affluent, avg. children and high education, the avg discount oriented, likely to purchase popular products, buys low volume, and has high brand loyalty
+### Segment 2 is: low affluent, avg. children and low education, the most discount oriented, likely to purchase generic products, buys high volume, and has least brand loyalty
+### Segment 3 is:most affluent, least children and most education, the high discount oriented, likely to purchase popular products, buys highest volume, and has low brand loyalty
+### Segment 4 is:high affluent, most children and high education, the avg discount oriented, likely to purchase premium products, buys lowest volume, and has low brand loyalty
+### Segment 5 is: lowest affluent, most children and lowest education, the low discount oriented, likely to purchase economy products, buys high volume, and has most brand loyalty
+
+# Conclusion:
+## Recommend using the behavior cluster model for segmenting the customer base and target cluster 3 for marketing materials (shown in the cluster plot above) - this cluster has lowest brand loyaty, is price sensitive (thus will respond to promotional marketing), buys high volume of product, and tends to buy in the premium and popular brand categories.  This segment represents the ideal target for a promotional marketing campaign.
+
+## The ideal candidate by order of importance for a direct mail promotion is: likeliness to use a promotion (because those that historically have not uses promotions will not be likely to apply the promotion in the future), second high volume of purchase (as those that buy more will be more inclined to buy with the promotion), third brand loyalty (those customers that are not brand loyal will be willing to switch brands to take advantage of a promotion), finally assuming that the company that would want to invest advertising dollars in any type of promotion would be those with premium and popular brand categories this final attribute is important to the recommendation.  The recommended cluster scores positively in all of these areas and thus would be ideal candidates for a marketing campaign.
+
+
+```{r}
+set.seed(20)
+k.rankings.behavior<-kmeans(data.behavior[,2:8],centers=3,nstart = 25)
+fviz_cluster(k.rankings.behavior, data = data.behavior[,2:8])
+
+```
+
